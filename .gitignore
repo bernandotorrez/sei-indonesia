@@ -4,6 +4,9 @@
 /be/
 /Take-Home Technical Assessment*.pdf
 
+# Claude Code session/tooling config - local dev-environment only, not part of the app.
+/.claude/
+
 # Node
 node_modules/
 .env
