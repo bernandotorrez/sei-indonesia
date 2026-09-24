@@ -1,0 +1,89 @@
+# Runs the entire stack (Postgres + API + worker + Nuxt frontend) with a single command:
+#
+#   cp .env.example .env   # fill in JWT_SECRET / reCAPTCHA keys if you have them
+#   docker compose up --build
+#
+# This is an ALTERNATIVE to the manual "npm install && npm run dev" setup documented in
+# README.md, not something you run alongside it - both bind the same host ports (3000, 4000,
+# 5432). Pick one.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: stock_opname
+      POSTGRES_USER: stock_opname
+      POSTGRES_PASSWORD: stock_opname
+    ports:
+      - '5432:5432'
+    volumes:
+      - stock_opname_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U stock_opname']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: runs migrations then the seeder, then exits. Safe to run on every `up` - the
+  # seeder is tracked by Sequelize and skips anything already applied.
+  migrate:
+    build:
+      context: ./stock-opname-be
+    command: sh -c "npx sequelize-cli db:migrate && npx sequelize-cli db:seed:all"
+    environment: &backend-env
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: stock_opname
+      DB_USER: stock_opname
+      DB_PASS: stock_opname
+      DB_DIALECT: postgres
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_EXPIRES_IN: 8h
+      WORKER_POLL_INTERVAL_MS: 2000
+      CORS_ORIGIN: http://localhost:3000
+      LOGIN_RATE_LIMIT_WINDOW_MS: 900000
+      LOGIN_RATE_LIMIT_MAX: 10
+      ACCOUNT_LOCKOUT_MAX_ATTEMPTS: 3
+      ACCOUNT_LOCKOUT_MINUTES: 15
+      RECAPTCHA_SECRET_KEY: ${RECAPTCHA_SECRET_KEY:-}
+      RECAPTCHA_MIN_SCORE: 0.5
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ./stock-opname-be
+    command: node server.js
+    ports:
+      - '4000:4000'
+    environment: *backend-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    build:
+      context: ./stock-opname-be
+    command: node jobs/reconciliationWorker.js
+    environment: *backend-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  frontend:
+    build:
+      context: ./stock-opname-fe
+    ports:
+      - '3000:3000'
+    environment:
+      # Overrides nuxt.config.ts's runtimeConfig at container start (Nuxt's own convention:
+      # NUXT_<KEY> for private keys, NUXT_PUBLIC_<KEY> for public ones) - no rebuild needed to
+      # point this at a different backend.
+      NUXT_API_BASE_URL: http://backend:4000/v1
+      NUXT_PUBLIC_RECAPTCHA_SITE_KEY: ${NUXT_PUBLIC_RECAPTCHA_SITE_KEY:-}
+    depends_on:
+      - backend
+
+volumes:
+  stock_opname_pg_data:

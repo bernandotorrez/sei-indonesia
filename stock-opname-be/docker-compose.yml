@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: stock_opname
+      POSTGRES_USER: stock_opname
+      POSTGRES_PASSWORD: stock_opname
+    ports:
+      - '5432:5432'
+    volumes:
+      - stock_opname_pg_data:/var/lib/postgresql/data
+
+volumes:
+  stock_opname_pg_data:

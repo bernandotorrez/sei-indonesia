@@ -1,0 +1,20 @@
+# Unrelated reference projects kept locally for code-style reference only - not part of
+# this submission and not meant to be published.
+/fe/
+/be/
+/Take-Home Technical Assessment*.pdf
+
+# Node
+node_modules/
+.env
+.env.*
+!*.env.example
+
+# Nuxt
+stock-opname-fe/.nuxt/
+stock-opname-fe/.output/
+
+# Backend logs
+stock-opname-be/logs/*.log
+
+.DS_Store
